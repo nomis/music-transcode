@@ -48,6 +48,7 @@ root.addHandler(handler)
 
 
 def filter_file(name):
+	name = os.path.basename(name)
 	if name.split(".")[-1] in extensions:
 		return True
 	if name in extra:
