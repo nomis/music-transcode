@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # music-transcode - Convert music from FLAC to a lower bitrate format
-# Copyright 2020  Simon Arlott
+# Copyright 2020-2021  Simon Arlott
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -62,11 +62,11 @@ def copy_file(args):
 	subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership,timestamps", "--", os.path.join(src, name).encode("utf8", "surrogateescape"), os.path.join(dst, name).encode("utf8", "surrogateescape")], check=True)
 
 def copy_flac(args):
-	(name, src, dst) = args
+	(name, src, dst, quality) = args
 	logging.info(f"Convert {name}.flac to {name}.{format}")
-	subprocess.run(["oggenc", "--quality", "6", "--discard-comments", "--quiet", b"--output=" + os.path.join(dst, f"{name}.ogg~").encode("utf8", "surrogateescape"), "--", os.path.join(src, f"{name}.flac").encode("utf8", "surrogateescape")], check=True)
+	subprocess.run(["oggenc", "--quality", str(quality), "--discard-comments", "--quiet", b"--output=" + os.path.join(dst, f"{name}.ogg~").encode("utf8", "surrogateescape"), "--", os.path.join(src, f"{name}.flac").encode("utf8", "surrogateescape")], check=True)
 	os.rename(os.path.join(dst, f"{name}.ogg~"), os.path.join(dst, f"{name}.ogg"))
-	sync_flac(args)
+	sync_flac(args[:-1])
 
 
 def sync_flac(args):
@@ -80,7 +80,7 @@ def sync_flac(args):
 		dst.save()
 
 
-def sync_paths(src, dst, user=None):
+def sync_paths(src, dst, quality=6, user=None):
 	access = {}
 	pwnam = pwd.getpwnam(user)
 	uid = pwnam.pw_uid
@@ -199,7 +199,7 @@ def sync_paths(src, dst, user=None):
 
 	with mp.Pool(os.cpu_count()) as p:
 		p.map(copy_file, [(name, src, dst) for name in (src_not_flac_files - dst_files)])
-		p.map(copy_flac, [(name, src, dst) for name in (src_flac_files - dst_format_files)])
+		p.map(copy_flac, [(name, src, dst, quality) for name in (src_flac_files - dst_format_files)])
 		p.map(sync_flac, [(name, src, dst) for name in (src_flac_files & dst_format_files)])
 
 
@@ -209,9 +209,10 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Convert music from FLAC to a lower bitrate format")
 	parser.add_argument("--src", metavar="PATH", type=str, required=True, help="Source path")
 	parser.add_argument("--dst", metavar="PATH", type=str, required=True, help="Destination path")
+	parser.add_argument("--quality", metavar="QUALITY", type=int, default=6, help="Encoding quality")
 	parser.add_argument("--user", metavar="USER", type=str, help="Ignore source files that are not accessible by USER")
 
 	args = parser.parse_args()
 	logging.debug("start")
-	sync_paths(args.src, args.dst, args.user)
+	sync_paths(args.src, args.dst, args.quality, args.user)
 	logging.debug("stop")
