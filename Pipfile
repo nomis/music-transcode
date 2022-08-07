@@ -7,6 +7,7 @@ verify_ssl = true
 
 [packages]
 mutagen = "~=1.44.0"
+unidecode = "*"
 
 [requires]
 python_version = "3.7"
