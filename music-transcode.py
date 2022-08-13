@@ -18,6 +18,7 @@
 import argparse
 import grp
 import logging
+import math
 import multiprocessing as mp
 import mutagen.flac
 import mutagen.oggvorbis
@@ -63,7 +64,7 @@ def filter_file(name):
 def round_mtime(filename):
 	stat = os.lstat(filename)
 	if stat.st_mtime % 2 != 0:
-		mtime = (stat.st_mtime + 1) // 2 * 2
+		mtime = (math.ceil(stat.st_mtime) + 1) // 2 * 2
 		os.utime(filename, times=(stat.st_atime, mtime))
 
 
@@ -300,6 +301,10 @@ def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False):
 		logging.debug(f"Create dir {name}")
 		assert safe_filename(name)
 		os.makedirs(os.path.join(dst, name), exist_ok=True)
+
+	if fat:
+		for name in dst_dirs:
+			round_mtime(os.path.join(dst, name))
 
 	with mp.Pool(os.cpu_count()) as p:
 		p.map(copy_file, [(src, src_not_flac_map_files[name], dst, name, fat) for name in (src_not_flac_files - dst_files)])
