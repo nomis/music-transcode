@@ -121,13 +121,22 @@ def sync_flac(args):
 		round_mtime(os.path.join(dst, f"{dst_name}.ogg"))
 
 
+def fat_safe(text):
+	assert text != ""
+	while text.endswith("."):
+		text = text[:-1]
+	assert text != ""
+	return text
+
 def safe_chars_only(text, file=True):
+	assert text != ""
 	text = text.replace("P!nk", "Pink")
-	text = "/".join([unidecode.unidecode(x).replace("/", "_") for x in text.split("/")])
+	text = "/".join([fat_safe(unidecode.unidecode(x).replace("/", "_")) for x in text.split("/")])
 	if file:
 		text = re_unsafe_f.sub("_", text)
 	else:
 		text = re_unsafe_d.sub("_", text)
+	assert text != ""
 	return text
 
 
