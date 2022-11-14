@@ -303,7 +303,7 @@ def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False):
 		os.makedirs(os.path.join(dst, name), exist_ok=True)
 
 	if fat:
-		for name in dst_dirs:
+		for name in src_dirs & dst_dirs:
 			round_mtime(os.path.join(dst, name))
 
 	with mp.Pool(os.cpu_count()) as p:
