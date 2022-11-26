@@ -52,11 +52,11 @@ handler.setFormatter(logging.Formatter("%(asctime)s %(processName)-10s %(levelna
 root.addHandler(handler)
 
 
-def filter_file(name):
+def filter_file(name, no_extra):
 	name = os.path.basename(name)
 	if name.split(".")[-1] in extensions:
 		return True
-	if name in extra:
+	if not no_extra and name in extra:
 		return True
 	return False
 
@@ -156,7 +156,7 @@ def get_title(filename):
 	return f"{prefix}{title}"
 
 
-def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False):
+def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extra=False):
 	access = {}
 	if user is not None:
 		pwnam = pwd.getpwnam(user)
@@ -217,7 +217,7 @@ def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False):
 	for root, dirs, files in os.walk(src, followlinks=True):
 		for name in files:
 			name = os.path.join(root, name)
-			if filter_file(name) and _has_access(name):
+			if filter_file(name, no_extra) and _has_access(name):
 				walk_dir = os.path.dirname(name)
 				while walk_dir != src:
 					dir_name = os.path.relpath(walk_dir, src)
@@ -322,8 +322,9 @@ if __name__ == "__main__":
 	parser.add_argument("--user", metavar="USER", type=str, help="Ignore source files that are not accessible by USER")
 	parser.add_argument("--rewrite", action="store_true", help="Rewrite filenames to be safe and use titles")
 	parser.add_argument("--fat", action="store_true", help="Round output file timestamps up")
+	parser.add_argument("--no-extra", action="store_true", help="No extra files")
 
 	args = parser.parse_args()
 	logging.debug("start")
-	sync_paths(args.src, args.dst, args.quality, args.user, args.rewrite, args.fat)
+	sync_paths(args.src, args.dst, args.quality, args.user, args.rewrite, args.fat, args.no_extra)
 	logging.debug("stop")
