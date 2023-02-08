@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # music-transcode - Convert music from FLAC to a lower bitrate format
-# Copyright 2020-2022  Simon Arlott
+# Copyright 2020-2023  Simon Arlott
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -44,6 +44,7 @@ extra = set([
 ])
 re_unsafe_d = re.compile(r"[^A-Za-z0-9 .,&'()_/-]")
 re_unsafe_f = re.compile(r"[^A-Za-z0-9 .,&'()_-]")
+re_unsafe_android = re.compile(r"[\"*:<>?\\|]")
 
 root = logging.getLogger()
 root.setLevel(level=logging.DEBUG)
@@ -140,6 +141,11 @@ def safe_chars_only(text, file=True):
 	assert text != ""
 	return text
 
+def android_safe_chars_only(text):
+	assert text != ""
+	text = re_unsafe_android.sub("_", text)
+	return text
+
 
 def get_title(filename):
 	src = mutagen.flac.FLAC(filename)
@@ -156,7 +162,7 @@ def get_title(filename):
 	return f"{prefix}{title}"
 
 
-def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extra=False):
+def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extra=False, android=False):
 	access = {}
 	if user is not None:
 		pwnam = pwd.getpwnam(user)
@@ -223,6 +229,8 @@ def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extr
 					dir_name = os.path.relpath(walk_dir, src)
 					if rewrite:
 						modified_dirname = safe_chars_only(dir_name, False)
+					elif android:
+						modified_dirname = android_safe_chars_only(dir_name)
 					else:
 						modified_dirname = dir_name
 					src_dirs.add(modified_dirname)
@@ -249,6 +257,8 @@ def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extr
 			name = ".".join(parts[0:-1])
 			if rewrite:
 				modified_name = os.path.join(safe_chars_only(os.path.dirname(name), False), get_title(os.path.join(src, f"{name}.flac")))
+			elif android:
+				modified_name = android_safe_chars_only(name)
 			else:
 				modified_name = name
 			src_flac_files.add(modified_name)
@@ -257,6 +267,8 @@ def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extr
 		else:
 			if rewrite:
 				modified_name = safe_chars_only(name, False)
+			elif android:
+				modified_name = android_safe_chars_only(name)
 			else:
 				modified_name = name
 			src_not_flac_files.add(modified_name)
@@ -323,8 +335,9 @@ if __name__ == "__main__":
 	parser.add_argument("--rewrite", action="store_true", help="Rewrite filenames to be safe and use titles")
 	parser.add_argument("--fat", action="store_true", help="Round output file timestamps up")
 	parser.add_argument("--no-extra", action="store_true", help="No extra files")
+	parser.add_argument("--android", action="store_true", help="Android compatibility")
 
 	args = parser.parse_args()
 	logging.debug("start")
-	sync_paths(args.src, args.dst, args.quality, args.user, args.rewrite, args.fat, args.no_extra)
+	sync_paths(args.src, args.dst, args.quality, args.user, args.rewrite, args.fat, args.no_extra, args.android)
 	logging.debug("stop")
