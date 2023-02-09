@@ -143,6 +143,7 @@ def safe_chars_only(text, file=True):
 
 def android_safe_chars_only(text):
 	assert text != ""
+	text = text.replace(":", "∶").replace("?", "⸮")
 	text = re_unsafe_android.sub("_", text)
 	return text
 
