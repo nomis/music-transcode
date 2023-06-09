@@ -10,4 +10,4 @@ mutagen = "~=1.44.0"
 unidecode = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.8"
