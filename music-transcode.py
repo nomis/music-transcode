@@ -84,7 +84,7 @@ def copy_file(args):
 	logging.info(f"Create {dst_name}")
 	assert safe_filename(src_name), src_name
 	assert safe_filename(dst_name), dst_name
-	subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership,timestamps", "--",
+	subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership", "--",
 		os.path.join(src, src_name).encode("utf8", "surrogateescape"),
 		os.path.join(dst, f"{dst_name}~").encode("utf8", "surrogateescape")], check=True)
 	os.rename(os.path.join(dst, f"{dst_name}~"), os.path.join(dst, f"{dst_name}"))
