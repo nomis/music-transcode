@@ -20,7 +20,9 @@ import grp
 import logging
 import math
 import multiprocessing as mp
+import mutagen.easyid3
 import mutagen.flac
+import mutagen.mp3
 import mutagen.oggvorbis
 import os
 import pwd
@@ -38,9 +40,9 @@ extensions = set([
 	"ogg",
 	"m4a",
 ])
-format = "ogg"
 extra = set([
 	"cover.jpg",
+	"playlist-christmas.jpg",
 ])
 re_unsafe_d = re.compile(r"[^A-Za-z0-9 .,&'()_/-]")
 re_unsafe_f = re.compile(r"[^A-Za-z0-9 .,&'()_-]")
@@ -93,34 +95,57 @@ def copy_file(args):
 
 
 def copy_flac(args):
-	(src, src_name, dst, dst_name, fat, quality) = args
+	(src, src_name, dst, dst_name, fat, format, quality) = args
 	logging.info(f"Convert {src_name}.flac to {dst_name}.{format}")
 	assert safe_filename(src_name), src_name
 	assert safe_filename(dst_name), dst_name
-	subprocess.run(["oggenc", "--quality", str(quality), "--discard-comments", "--quiet",
-		b"--output=" + os.path.join(dst, f"{dst_name}.ogg~").encode("utf8", "surrogateescape"),
-		"--", os.path.join(src, f"{src_name}.flac").encode("utf8", "surrogateescape")], check=True)
-	os.rename(os.path.join(dst, f"{dst_name}.ogg~"), os.path.join(dst, f"{dst_name}.ogg"))
+	if format == "ogg":
+		subprocess.run(["oggenc", "--quality", str(quality), "--discard-comments", "--quiet",
+			b"--output=" + os.path.join(dst, f"{dst_name}.ogg~").encode("utf8", "surrogateescape"),
+			"--", os.path.join(src, f"{src_name}.flac").encode("utf8", "surrogateescape")], check=True)
+		os.rename(os.path.join(dst, f"{dst_name}.ogg~"), os.path.join(dst, f"{dst_name}.ogg"))
+	elif format == "mp3":
+		subprocess.run(["lame", "--quiet", "--replaygain-accurate", "-m", "s", "-V", str(quality), "-q", "0",
+			os.path.join(src, f"{src_name}.flac").encode("utf8", "surrogateescape"),
+			os.path.join(dst, f"{dst_name}.mp3~").encode("utf8", "surrogateescape")], check=True)
+		os.rename(os.path.join(dst, f"{dst_name}.mp3~"), os.path.join(dst, f"{dst_name}.mp3"))
+	else:
+		raise Exception(f"Unknown format: {format}")
 	sync_flac(args[:-1])
 
 
 def sync_flac(args):
-	(src, src_name, dst, dst_name, fat) = args
+	(src, src_name, dst, dst_name, fat, format) = args
 	assert safe_filename(src_name), src_name
 	assert safe_filename(dst_name), dst_name
 	src_m = mutagen.flac.FLAC(os.path.join(src, f"{src_name}.flac"))
-	dst_m = mutagen.oggvorbis.OggVorbis(os.path.join(dst, f"{dst_name}.ogg"))
+	if format == "ogg":
+		dst_fn = os.path.join(dst, f"{dst_name}.ogg")
+		dst_m = mutagen.oggvorbis.OggVorbis(dst_fn)
+	elif format == "mp3":
+		dst_fn = os.path.join(dst, f"{dst_name}.mp3")
+		dst_m = mutagen.mp3.EasyMP3(dst_fn)
+		if dst_m.tags is None:
+			dst_m.add_tags()
+	else:
+		raise Exception(f"Unknown format: {format}")
+
 	if sorted(src_m.tags) != sorted(dst_m.tags):
 		logging.debug(f"Tag {dst_name}.{format}")
 		dst_m.tags.clear()
-		dst_m.tags.extend(src_m.tags)
+		for k, v in src_m.tags.items():
+			try:
+				dst_m.tags[k] = v
+			except mutagen.easyid3.EasyID3KeyError:
+				continue
 		subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership,timestamps", "--",
-			os.path.join(dst, f"{dst_name}.ogg").encode("utf8", "surrogateescape"),
-			os.path.join(dst, f"{dst_name}.ogg~").encode("utf8", "surrogateescape")], check=True)
-		dst_m.save(os.path.join(dst, f"{dst_name}.ogg~"))
-		os.rename(os.path.join(dst, f"{dst_name}.ogg~"), os.path.join(dst, f"{dst_name}.ogg"))
+			dst_fn.encode("utf8", "surrogateescape"),
+			f"{dst_fn}~".encode("utf8", "surrogateescape")], check=True)
+		dst_m.save(f"{dst_fn}~")
+		os.rename(f"{dst_fn}~", dst_fn)
+
 	if fat:
-		round_mtime(os.path.join(dst, f"{dst_name}.ogg"))
+		round_mtime(dst_fn)
 
 
 def fat_safe(text):
@@ -163,7 +188,7 @@ def get_title(filename):
 	return f"{prefix}{title}"
 
 
-def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extra=False, android=False):
+def sync_paths(src, dst, format="ogg", quality=6, user=None, rewrite=False, fat=False, no_extra=False, android=False):
 	access = {}
 	if user is not None:
 		pwnam = pwd.getpwnam(user)
@@ -321,8 +346,8 @@ def sync_paths(src, dst, quality=6, user=None, rewrite=False, fat=False, no_extr
 
 	with mp.Pool(os.cpu_count()) as p:
 		p.map(copy_file, [(src, src_not_flac_map_files[name], dst, name, fat) for name in (src_not_flac_files - dst_files)])
-		p.map(copy_flac, [(src, src_flac_map_files[name], dst, name, fat, quality) for name in (src_flac_files - dst_format_files)])
-		p.map(sync_flac, [(src, src_flac_map_files[name], dst, name, fat) for name in (src_flac_files & dst_format_files)])
+		p.map(copy_flac, [(src, src_flac_map_files[name], dst, name, fat, format, quality) for name in (src_flac_files - dst_format_files)])
+		p.map(sync_flac, [(src, src_flac_map_files[name], dst, name, fat, format) for name in (src_flac_files & dst_format_files)])
 
 
 if __name__ == "__main__":
@@ -331,6 +356,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Convert music from FLAC to a lower bitrate format")
 	parser.add_argument("--src", metavar="PATH", type=str, required=True, help="Source path")
 	parser.add_argument("--dst", metavar="PATH", type=str, required=True, help="Destination path")
+	parser.add_argument("--format", metavar="FORMAT", type=str, default="ogg", help="Encoding format")
 	parser.add_argument("--quality", metavar="QUALITY", type=int, default=6, help="Encoding quality")
 	parser.add_argument("--user", metavar="USER", type=str, help="Ignore source files that are not accessible by USER")
 	parser.add_argument("--rewrite", action="store_true", help="Rewrite filenames to be safe and use titles")
@@ -340,5 +366,5 @@ if __name__ == "__main__":
 
 	args = parser.parse_args()
 	logging.debug("start")
-	sync_paths(args.src, args.dst, args.quality, args.user, args.rewrite, args.fat, args.no_extra, args.android)
+	sync_paths(args.src, args.dst, args.format, args.quality, args.user, args.rewrite, args.fat, args.no_extra, args.android)
 	logging.debug("stop")
