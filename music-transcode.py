@@ -127,17 +127,33 @@ def sync_flac(args):
 		dst_m = mutagen.mp3.EasyMP3(dst_fn)
 		if dst_m.tags is None:
 			dst_m.add_tags()
+		for tag in src_m.tags.keys():
+			try:
+				dst_m[tag]
+			except mutagen.easyid3.EasyID3KeyError:
+				del src_m.tags[tag]
 	else:
 		raise Exception(f"Unknown format: {format}")
 
-	if sorted(src_m.tags) != sorted(dst_m.tags):
+	src_tags = dict(src_m.tags)
+	dst_tags = dict(dst_m.tags)
+
+	if format == "mp3":
+		# These can't be represented precisely in the MP3 format
+		del src_tags["replaygain_track_gain"]
+		del src_tags["replaygain_track_peak"]
+		del src_tags["replaygain_album_gain"]
+		del src_tags["replaygain_album_peak"]
+		del dst_tags["replaygain_track_gain"]
+		del dst_tags["replaygain_track_peak"]
+		del dst_tags["replaygain_album_gain"]
+		del dst_tags["replaygain_album_peak"]
+
+	if src_tags != dst_tags:
 		logging.debug(f"Tag {dst_name}.{format}")
 		dst_m.tags.clear()
 		for k, v in src_m.tags.items():
-			try:
-				dst_m.tags[k] = v
-			except mutagen.easyid3.EasyID3KeyError:
-				continue
+			dst_m.tags[k] = v
 		subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership,timestamps", "--",
 			dst_fn.encode("utf8", "surrogateescape"),
 			f"{dst_fn}~".encode("utf8", "surrogateescape")], check=True)
