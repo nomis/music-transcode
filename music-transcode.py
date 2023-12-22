@@ -132,6 +132,8 @@ def sync_flac(args):
 				dst_m[tag]
 			except mutagen.easyid3.EasyID3KeyError:
 				del src_m.tags[tag]
+			except KeyError:
+				pass
 	else:
 		raise Exception(f"Unknown format: {format}")
 
@@ -140,14 +142,11 @@ def sync_flac(args):
 
 	if format == "mp3":
 		# These can't be represented precisely in the MP3 format
-		del src_tags["replaygain_track_gain"]
-		del src_tags["replaygain_track_peak"]
-		del src_tags["replaygain_album_gain"]
-		del src_tags["replaygain_album_peak"]
-		del dst_tags["replaygain_track_gain"]
-		del dst_tags["replaygain_track_peak"]
-		del dst_tags["replaygain_album_gain"]
-		del dst_tags["replaygain_album_peak"]
+		for tag in ("replaygain_track_gain", "replaygain_track_peak", "replaygain_album_gain", "replaygain_album_peak"):
+			if tag in src_tags:
+				del src_tags[tag]
+			if tag in dst_tags:
+				del dst_tags[tag]
 
 	if src_tags != dst_tags:
 		logging.debug(f"Tag {dst_name}.{format}")
