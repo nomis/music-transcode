@@ -82,13 +82,18 @@ def safe_filename(name):
 
 
 def copy_file(args):
-	(src, src_name, dst, dst_name, fat) = args
+	(src, src_name, dst, dst_name, fat, resize) = args
 	logging.info(f"Create {dst_name}")
 	assert safe_filename(src_name), src_name
 	assert safe_filename(dst_name), dst_name
-	subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership", "--",
-		os.path.join(src, src_name).encode("utf8", "surrogateescape"),
-		os.path.join(dst, f"{dst_name}~").encode("utf8", "surrogateescape")], check=True)
+	if resize and src_name.endswith(".jpg"):
+		subprocess.run(["convert", "-resize", "400x400", "-quality", "99", "--",
+			os.path.join(src, src_name).encode("utf8", "surrogateescape"),
+			os.path.join(dst, f"{dst_name}~").encode("utf8", "surrogateescape")], check=True)
+	else:
+		subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership", "--",
+			os.path.join(src, src_name).encode("utf8", "surrogateescape"),
+			os.path.join(dst, f"{dst_name}~").encode("utf8", "surrogateescape")], check=True)
 	os.rename(os.path.join(dst, f"{dst_name}~"), os.path.join(dst, f"{dst_name}"))
 	if fat:
 		round_mtime(os.path.join(dst, dst_name))
@@ -203,7 +208,7 @@ def get_title(filename):
 	return f"{prefix}{title}"
 
 
-def sync_paths(src, dst, format="ogg", quality=6, user=None, rewrite=False, fat=False, no_extra=False, android=False):
+def sync_paths(src, dst, format="ogg", quality=6, user=None, rewrite=False, fat=False, no_extra=False, resize=False, android=False):
 	access = {}
 	if user is not None:
 		pwnam = pwd.getpwnam(user)
@@ -360,7 +365,7 @@ def sync_paths(src, dst, format="ogg", quality=6, user=None, rewrite=False, fat=
 			round_mtime(os.path.join(dst, name))
 
 	with mp.Pool(os.cpu_count()) as p:
-		p.map(copy_file, [(src, src_not_flac_map_files[name], dst, name, fat) for name in (src_not_flac_files - dst_files)])
+		p.map(copy_file, [(src, src_not_flac_map_files[name], dst, name, fat, resize) for name in (src_not_flac_files - dst_files)])
 		p.map(copy_flac, [(src, src_flac_map_files[name], dst, name, fat, format, quality) for name in (src_flac_files - dst_format_files)])
 		p.map(sync_flac, [(src, src_flac_map_files[name], dst, name, fat, format) for name in (src_flac_files & dst_format_files)])
 
@@ -377,9 +382,10 @@ if __name__ == "__main__":
 	parser.add_argument("--rewrite", action="store_true", help="Rewrite filenames to be safe and use titles")
 	parser.add_argument("--fat", action="store_true", help="Round output file timestamps up")
 	parser.add_argument("--no-extra", action="store_true", help="No extra files")
+	parser.add_argument("--resize", action="store_true", help="Resize images to 400x400")
 	parser.add_argument("--android", action="store_true", help="Android compatibility")
 
 	args = parser.parse_args()
 	logging.debug("start")
-	sync_paths(args.src, args.dst, args.format, args.quality, args.user, args.rewrite, args.fat, args.no_extra, args.android)
+	sync_paths(args.src, args.dst, args.format, args.quality, args.user, args.rewrite, args.fat, args.no_extra, args.resize, args.android)
 	logging.debug("stop")
