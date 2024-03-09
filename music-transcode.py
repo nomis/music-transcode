@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # music-transcode - Convert music from FLAC to a lower bitrate format
-# Copyright 2020-2023  Simon Arlott
+# Copyright 2020-2024  Simon Arlott
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import base64
 import grp
 import logging
 import math
@@ -153,11 +154,23 @@ def sync_flac(args):
 			if tag in dst_tags:
 				del dst_tags[tag]
 
+	save = False
 	if src_tags != dst_tags:
 		logging.debug(f"Tag {dst_name}.{format}")
 		dst_m.tags.clear()
 		for k, v in src_m.tags.items():
 			dst_m.tags[k] = v
+		save = True
+
+	if format == "ogg" and not dst_m.get("metadata_block_picture", []):
+		if src_m.pictures:
+			logging.debug(f"Image {dst_name}.{format}")
+			dst_m["metadata_block_picture"] = [base64.b64encode(src_m.pictures[0].write()).decode("ascii")]
+			save = True
+
+		# TODO find image by filename.jpg
+
+	if save:
 		subprocess.run(["cp", "--reflink=auto", "--no-preserve=mode,ownership,timestamps", "--",
 			dst_fn.encode("utf8", "surrogateescape"),
 			f"{dst_fn}~".encode("utf8", "surrogateescape")], check=True)
