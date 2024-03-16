@@ -155,6 +155,11 @@ def sync_flac(args):
 				del dst_tags[tag]
 
 	save = False
+
+	# Don't detect a picture as a tag mismatch
+	if format == "ogg" and "metadata_block_picture" not in src_tags and "metadata_block_picture" in dst_tags:
+		del dst_tags["metadata_block_picture"]
+
 	if src_tags != dst_tags:
 		logging.debug(f"Tag {dst_name}.{format}")
 		dst_m.tags.clear()
